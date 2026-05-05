@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  # ── Temporal's internal storage ──────────────────────────────────────────
+  temporal-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_DB: temporal
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U temporal']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Temporal server (auto-setup bundles server + schema migration) ────────
+  temporal:
+    image: temporalio/auto-setup:1.24.2
+    depends_on:
+      temporal-db:
+        condition: service_healthy
+    environment:
+      DB: postgresql
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: temporal
+      POSTGRES_SEEDS: temporal-db
+    ports:
+      - '7233:7233'
+    healthcheck:
+      test: ['CMD', 'tctl', '--address', 'temporal:7233', 'cluster', 'health']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Temporal UI ──────────────────────────────────────────────────────────
+  temporal-ui:
+    image: temporalio/ui:2.26.2
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+    ports:
+      - '8080:8080'   # open http://localhost:8080 to watch workflows
+
+  # ── App database (our creator / media / insights data) ───────────────────
+  app-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: creator_insights
+      POSTGRES_PASSWORD: creator_insights
+      POSTGRES_DB: creator_insights
+    ports:
+      - '5433:5432'   # exposed on 5433 so it doesn't clash with temporal-db
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U creator_insights']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Mock Instagram API ────────────────────────────────────────────────────
+  mock-api:
+    build: ./mock-api
+    ports:
+      - '3001:3001'
+    environment:
+      PORT: 3001
