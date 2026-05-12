@@ -1,4 +1,4 @@
-# creator-insights-etl
+# insights-etl
 
 > A hands-on demo of Temporal.io patterns for reliable ETL — built around a real-world problem: syncing Instagram creator data at scale.
 
